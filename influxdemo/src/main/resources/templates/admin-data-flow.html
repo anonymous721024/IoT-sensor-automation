@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <title>Data Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+  <style>
+    /* match your existing style language */
+    .grid2 { display:grid; grid-template-columns: 1.2fr 0.8fr; gap:16px; }
+    .card { background:#fff; border:1px solid #e8e8e8; border-radius:18px; padding:16px; }
+    .muted { color:#6b6b6b; font-size:12px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    label { font-size:12px; color:#555; }
+
+    input, select {
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid #ddd;
+      outline:none;
+      font-size:14px;
+      background:#fff;
+      min-width: 160px;
+    }
+    input:focus, select:focus { border-color:#cfcfcf; }
+
+    .btn {
+      padding:10px 14px;
+      border-radius:12px;
+      border:1px solid #ddd;
+      background:#f7f7f7;
+      cursor:pointer;
+      font-weight:600;
+      white-space:nowrap;
+    }
+    .btn.primary { background:#111; color:#fff; border-color:#111; }
+    .btn.danger { background:#fff; border-color:#f0c7c7; color:#b00020; }
+
+    table { width:100%; border-collapse:separate; border-spacing:0; margin-top:12px; }
+    th, td { text-align:left; padding:12px; border-bottom:1px solid #eee; vertical-align:top; }
+    th { font-size:12px; color:#666; background:#fafafa; position:sticky; top:0; }
+    .table-wrap { border:1px solid #e8e8e8; border-radius:16px; overflow:hidden; background:#fff; }
+
+    .pill {
+      display:inline-block;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid #e8e8e8;
+      background:#fafafa;
+      font-size:12px;
+      color:#222;
+      margin-right:8px;
+    }
+
+    .chart-wrap {
+      border:1px solid #e8e8e8;
+      border-radius:16px;
+      overflow:hidden;
+      background:#fff;
+      padding:12px;
+    }
+
+    .kpi {
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
+    .kpi .item {
+      border:1px solid #eee;
+      border-radius:14px;
+      padding:10px 12px;
+      background:#fcfcfc;
+      min-width: 180px;
+    }
+    .kpi .item .label { font-size:12px; color:#666; font-weight:700; }
+    .kpi .item .value { margin-top:6px; font-size:18px; font-weight:800; color:#111; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+
+    .banner-ok { border-color:#dfeee2; background:#f3fbf5; }
+    .banner-alert { border-color:#f2c7c7; background:#fff5f5; }
+    
+    .chartControls { align-items: flex-end; }
+    .chartControls .field { min-width: 180px; }
+    .chartControls button { height: 42px; }
+  </style>
+</head>
+
+<body>
+
+<div th:replace="~{fragments/adminShell :: adminShell('dataflow','Data Flow')}">
+  <div th:fragment="content">
+
+    <!-- FILTERS -->
+    <div class="card">
+        <h2 style="margin:0;">Data Flow (60 minutes)</h2>
+        <div class="muted" style="margin-top:6px;">
+        Filter the master data scope, then view sensor temperatures over time for the selected ambient area.
+        </div>
+    
+        <!-- GET form so URL holds filter state -->
+        <form method="get" action="/admin/data-flow" style="margin-top:12px;">
+        <div class="row">
+    
+            <div class="field">
+            <label>Building</label>
+            <select name="building" onchange="this.form.submit()">
+                <option value="">All</option>
+                <option th:each="b : ${buildings}"
+                        th:value="${b}"
+                        th:text="${b}"
+                        th:selected="${b == selectedBuilding}">
+                </option>
+            </select>
+            </div>
+    
+            <div class="field">
+            <label>Level</label>
+            <select name="level" onchange="this.form.submit()">
+                <option value="">All</option>
+                <option th:each="l : ${levels}"
+                        th:value="${l}"
+                        th:text="${l}"
+                        th:selected="${l == selectedLevel}">
+                </option>
+            </select>
+            </div>
+    
+            <div class="field">
+            <label>Ambient Area</label>
+            <select name="area" onchange="this.form.submit()">
+                <option value="">Select...</option>
+                <option th:each="a : ${areas}"
+                        th:value="${a}"
+                        th:text="${a}"
+                        th:selected="${a == selectedArea}">
+                </option>
+            </select>
+            </div>
+    
+            <div class="field" style="flex:1; min-width:220px;">
+            <label>Sensor contains</label>
+            <input name="sensor" placeholder="e.g. AHU-01"
+                    th:value="${sensorQuery}">
+            </div>
+    
+            <button class="btn" type="submit">Apply</button>
+            <a class="btn" th:href="@{/admin/data-flow}">Clear</a>
+    
+        </div>
+        </form>
+    
+        <div style="margin-top:12px;">
+        <span class="pill">Building: <span th:text="${selectedBuilding == '' ? 'All' : selectedBuilding}">All</span></span>
+        <span class="pill">Level: <span th:text="${selectedLevel == '' ? 'All' : selectedLevel}">All</span></span>
+        <span class="pill">Area: <span th:text="${selectedArea == '' ? '-' : selectedArea}">-</span></span>
+        <span class="pill">Sensors in scope: <span th:text="${#lists.size(sensorsInScope)}">0</span></span>
+        </div>
+    
+        <!-- Alert banner -->
+        <div id="alertBanner" class="card" style="margin-top:12px; border-radius:16px; display:none;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <div>
+                    <div id="alertTitle" style="font-weight:900; font-size:16px;">-</div>
+                    <div id="alertDetail" class="muted" style="margin-top:6px;">-</div>
+                </div>
+            
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <div class="mono" id="alertStats" style="font-weight:800;"></div>
+            
+                    <!-- Opens Admin Chat with a prefilled message -->
+                    <a id="openChatBtn"
+                        class="btn primary"
+                        style="text-decoration:none; display:none;">                 
+                        Open Admin Chat
+                    </a>
+                </div>
+            </div>
+        </div>
+          
+    
+        <!-- SETTINGS + GENERATOR -->
+        <div class="kpi">
+        <div class="item">
+            <div class="label">Temp Low</div>
+            <div class="value" th:text="${settings != null && settings.temp_low != null ? settings.temp_low : '-'}">-</div>
+        </div>
+        <div class="item">
+            <div class="label">Temp High</div>
+            <div class="value" th:text="${settings != null && settings.temp_high != null ? settings.temp_high : '-'}">-</div>
+        </div>
+        <div class="item">
+            <div class="label">Overload Percent</div>
+            <div class="value" th:text="${settings != null && settings.overload_percent != null ? settings.overload_percent : '-'}">-</div>
+        </div>
+        <div class="item" style="flex:1; min-width:260px;">
+            <div class="label">Average (from chart)</div>
+            <div class="value" id="avgTemp">-</div>
+            <div class="muted" id="avgMeta" style="margin-top:6px;"></div>
+        </div>
+        </div>
+    
+        <div class="row" style="margin-top:12px;">
+        <form method="post" action="/admin/data-flow/generate" style="display:flex; gap:10px; flex-wrap:wrap;">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+            <input type="hidden" name="area" th:value="${selectedArea}" />
+    
+            <button class="btn" type="submit" name="mode" value="normal" th:disabled="${selectedArea == ''}">
+            Generate (Normal)
+            </button>
+    
+            <button class="btn" type="submit" name="mode" value="force_ok" th:disabled="${selectedArea == ''}">
+            Generate (Force OK)
+            </button>
+    
+            <button class="btn danger" type="submit" name="mode" value="force_alert" th:disabled="${selectedArea == ''}">
+            Generate (Force Alert)
+            </button>
+    
+            <span class="muted" style="align-self:center;" th:if="${selectedArea == ''}">
+            Select an ambient area to generate chart data.
+            </span>
+        </form>
+        </div>
+
+    </div>
+    <!-- END FILTERS CARD -->
+
+    <!-- CHART -->
+    <div class="card" style="margin-top:16px;">
+      <h3 style="margin:0 0 6px 0;">Temperature History</h3>
+
+      <div class="muted" style="margin-bottom:12px;">
+        Interactive time-series chart. Zoom with mouse wheel, drag to pan.
+      </div>
+
+      <!-- Chart Controls -->
+      <div class="row chartControls" style="margin-bottom:12px; gap:16px;">
+        <div class="field">
+          <label>Start Time</label>
+          <input type="datetime-local" id="startTime">
+        </div>
+
+        <div class="field">
+          <label>Interval</label>
+          <select id="intervalSelect">
+            <option value="raw">Raw</option>
+            <option value="30">30 sec</option>
+            <option value="60">1 min</option>
+            <option value="300">5 min</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Live Mode</label>
+          <select id="liveMode">
+            <option value="off">Off</option>
+            <option value="on">On (5s refresh)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn" type="button" id="resetZoomBtn">Reset Zoom</button>
+        </div>
+      </div>
+
+
+      <div class="chart-wrap" style="height:420px;">
+        <canvas id="tempChart"></canvas>
+      </div>
+    </div>
+
+    <!-- MASTER DATA (SCOPE) -->
+    <div class="card" style="margin-top:16px;">
+      <h3 style="margin:0 0 10px 0;">Master Data (Sensors in Scope)</h3>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Sensor Name</th>
+              <th>Device</th>
+              <th>Building</th>
+              <th>Level</th>
+              <th>Ambient Area</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:if="${#lists.isEmpty(sensorsInScope)}">
+              <td colspan="6">No sensors found in this scope.</td>
+            </tr>
+
+            <tr th:each="s : ${sensorsInScope}">
+              <td th:text="${s.sensor_name}">-</td>
+              <td th:text="${s.device_name}">-</td>
+              <td th:text="${s.building}">-</td>
+              <td th:text="${s.level_area}">-</td>
+              <td th:text="${s.ambient_area}">-</td>
+              <td th:text="${s.sensor_description}">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RAW EVENTS (OPTIONAL TABLE) -->
+    <div class="card" style="margin-top:16px;">
+      <h3 style="margin:0 0 6px 0;">Data Flow Events (Raw)</h3>
+      <div class="muted" style="margin-bottom:10px;">
+        Raw readings used to build the chart (useful for debugging).
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Sensor</th>
+              <th>Area</th>
+              <th>Temp</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:if="${#lists.isEmpty(events)}">
+              <td colspan="5">No events found (generate data or wait for real sensors).</td>
+            </tr>
+
+            <tr th:each="e : ${events}">
+              <td th:text="${e.time}" class="mono">-</td>
+              <td th:text="${e.sensor_name}">-</td>
+              <td th:text="${e.ambient_area}">-</td>
+              <td th:text="${e.temperature}">-</td>
+              <td th:text="${e.status}">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CHART SCRIPT -->
+    <script th:inline="javascript">
+     /*<![CDATA[*/
+    const events = /*[[${events}]]*/ [];
+    const sensorsInScope = /*[[${sensorsInScope}]]*/ [];
+    const overloadPercent = /*[[${settings != null && settings.overload_percent != null ? settings.overload_percent : 70}]]*/ 70;
+    const tempLow = /*[[${settings != null && settings.temp_low != null ? settings.temp_low : 15.0}]]*/ 15.0;
+    const tempHigh = /*[[${settings != null && settings.temp_high != null ? settings.temp_high : 27.0}]]*/ 27.0;
+    const selectedArea = /*[[${selectedArea}]]*/ "";
+
+    // ---------------- ALERT LOGIC ----------------
+    const banner = document.getElementById("alertBanner");
+    const titleEl = document.getElementById("alertTitle");
+    const detailEl = document.getElementById("alertDetail");
+    const statsEl = document.getElementById("alertStats");
+    const openChatBtn = document.getElementById("openChatBtn");
+
+    const latestBySensor = {};
+    for (const e of events) {
+      if (e.sensor_name) latestBySensor[e.sensor_name] = e;
+    }
+
+    let overloaded = 0;
+    let missing = 0;
+    const totalSensors = sensorsInScope.length;
+    const required = Math.ceil((overloadPercent / 100.0) * totalSensors);
+
+    for (const s of sensorsInScope) {
+      const last = latestBySensor[s.sensor_name];
+      if (!last) { missing++; continue; }
+      if ((last.status || "").toUpperCase() === "OVER") overloaded++;
+    }
+
+    const triggered = overloaded >= required;
+
+    if (banner) {
+      banner.style.display = "block";
+      banner.classList.add(triggered ? "banner-alert" : "banner-ok");
+      titleEl.textContent = triggered ? "⚠️ ALERT: Temperature overload detected" : "✅ OK: Within threshold";
+      statsEl.textContent = `Overloaded ${overloaded}/${totalSensors} | Required ≥ ${required} (${overloadPercent}%)`;
+    }
+
+    if (triggered && openChatBtn) {
+      const msg =
+        `ALERT: Temperature overload detected\n` +
+        `Area: ${selectedArea}\n` +
+        `Overloaded sensors: ${overloaded}/${totalSensors}\n` +
+        `Thresholds: low=${tempLow}°C, high=${tempHigh}°C\n` +
+        `Please provide EOP instructions.`;
+
+      openChatBtn.href =
+        `/admin/chat?area=${encodeURIComponent(selectedArea)}&prefill=${encodeURIComponent(msg)}&autoselect=1`;
+
+      openChatBtn.style.display = "inline-block";
+    }
+
+    // ---------------- AVERAGE ----------------
+    let sum = 0;
+    let count = 0;
+
+    for (const e of events) {
+      const t = Number(e.temperature);
+      if (!Number.isNaN(t)) {
+        sum += t;
+        count++;
+      }
+    }
+
+    const avgEl = document.getElementById("avgTemp");
+    const metaEl = document.getElementById("avgMeta");
+
+    if (count === 0) {
+      avgEl.textContent = "-";
+      metaEl.textContent = "No readings yet.";
+    } else {
+      avgEl.textContent = (sum / count).toFixed(2) + " °C";
+      metaEl.textContent = count + " points across " + Object.keys(latestBySensor).length + " sensor(s).";
+    }
+
+   // -------------------- CHART (with start time + interval + pan/zoom + labels) --------------------
+    const startTimeEl = document.getElementById("startTime");
+    const intervalEl = document.getElementById("intervalSelect");
+    const liveModeEl = document.getElementById("liveMode");
+    const resetZoomBtn = document.getElementById("resetZoomBtn");
+
+    const canvas = document.getElementById("tempChart");
+    if (!canvas) {
+      // no chart on page
+    } else {
+      // parse thresholds
+      const tempLowLine = /*[[${settings != null && settings.temp_low != null ? settings.temp_low : 15.0}]]*/ 15.0;
+      const tempHighLine = /*[[${settings != null && settings.temp_high != null ? settings.temp_high : 27.0}]]*/ 27.0;
+
+      // ---------- helpers ----------
+      function toMs(t) {
+        const d = new Date(t);
+        const ms = d.getTime();
+        return Number.isNaN(ms) ? null : ms;
+      }
+
+      function fmtLabel(ms) {
+        const d = new Date(ms);
+        // cleaner: HH:mm
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+
+      // Build base dataset map: sensor -> (timeMs -> temp)
+      function buildBase(eventsArr) {
+        const bySensor = {};
+        const allTimes = [];
+
+        for (const e of eventsArr) {
+          if (!e || !e.sensor_name || e.temperature === undefined || e.time === undefined) continue;
+          const ms = toMs(e.time);
+          if (ms === null) continue;
+
+          if (!bySensor[e.sensor_name]) bySensor[e.sensor_name] = {};
+          bySensor[e.sensor_name][ms] = Number(e.temperature);
+
+          allTimes.push(ms);
+        }
+
+        const uniqTimes = Array.from(new Set(allTimes)).sort((a, b) => a - b);
+        return { bySensor, uniqTimes };
+      }
+
+      // Interval bucketing: seconds -> bucket start ms
+      function bucketMs(ms, intervalSec) {
+        const bucket = Math.floor(ms / (intervalSec * 1000)) * (intervalSec * 1000);
+        return bucket;
+      }
+
+      // Resample events by interval (mean per bucket per sensor)
+      function resample(eventsArr, intervalSec) {
+        // Map sensor -> bucket -> {sum,count}
+        const acc = {};
+        const allBuckets = [];
+
+        for (const e of eventsArr) {
+          if (!e || !e.sensor_name || e.temperature === undefined || e.time === undefined) continue;
+          const ms = toMs(e.time);
+          if (ms === null) continue;
+
+          const b = bucketMs(ms, intervalSec);
+
+          if (!acc[e.sensor_name]) acc[e.sensor_name] = {};
+          if (!acc[e.sensor_name][b]) acc[e.sensor_name][b] = { sum: 0, count: 0 };
+
+          const t = Number(e.temperature);
+          if (!Number.isNaN(t)) {
+            acc[e.sensor_name][b].sum += t;
+            acc[e.sensor_name][b].count += 1;
+          }
+          allBuckets.push(b);
+        }
+
+        const buckets = Array.from(new Set(allBuckets)).sort((a, b) => a - b);
+
+        // convert to sensor -> bucket -> avg
+        const bySensor = {};
+        for (const sensorName of Object.keys(acc)) {
+          bySensor[sensorName] = {};
+          for (const b of Object.keys(acc[sensorName])) {
+            const bb = Number(b);
+            const obj = acc[sensorName][bb];
+            bySensor[sensorName][bb] = obj.count === 0 ? null : (obj.sum / obj.count);
+          }
+        }
+
+        return { bySensor, uniqTimes: buckets };
+      }
+
+      function filterByStart(eventsArr, startMs) {
+        if (!startMs) return eventsArr;
+        return eventsArr.filter(e => {
+          const ms = toMs(e.time);
+          return ms !== null && ms >= startMs;
+        });
+      }
+
+      // ---------- chart ----------
+      let chart = null;
+
+      function buildDatasets(bySensor, times) {
+        const datasets = [];
+
+        for (const sensorName of Object.keys(bySensor)) {
+          const map = bySensor[sensorName];
+          const data = times.map(ms => (map[ms] !== undefined ? map[ms] : null));
+
+          datasets.push({
+            label: sensorName,
+            data,
+            spanGaps: true,
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.25
+          });
+        }
+
+        // threshold lines (always across all times)
+        datasets.push({
+          label: "High Threshold",
+          data: times.map(() => tempHighLine),
+          borderWidth: 2,
+          pointRadius: 0,
+          borderDash: [6, 6]
+        });
+
+        datasets.push({
+          label: "Low Threshold",
+          data: times.map(() => tempLowLine),
+          borderWidth: 2,
+          pointRadius: 0,
+          borderDash: [6, 6]
+        });
+
+        return datasets;
+      }
+
+      function renderChart() {
+        // 1) start time filter
+        let startMs = null;
+        const startVal = (startTimeEl && startTimeEl.value) ? startTimeEl.value : "";
+        if (startVal) {
+          const ms = new Date(startVal).getTime();
+          if (!Number.isNaN(ms)) startMs = ms;
+        }
+
+        // 2) interval
+        const intervalVal = intervalEl ? intervalEl.value : "raw";
+        let working = filterByStart(events, startMs);
+
+        let base;
+        if (intervalVal === "raw") {
+          base = buildBase(working);
+        } else {
+          const sec = parseInt(intervalVal, 10);
+          base = resample(working, sec);
+        }
+
+        const times = base.uniqTimes;
+        const bySensor = base.bySensor;
+
+        // labels on x
+        const labels = times.map(fmtLabel);
+        const datasets = buildDatasets(bySensor, times);
+
+        if (chart) {
+          chart.data.labels = labels;
+          chart.data.datasets = datasets;
+          chart.update();
+          return;
+        }
+
+        // Ensures zoom plugin is registered (required in some setups)
+        if (window.ChartZoom) {
+          Chart.register(window.ChartZoom);
+        } else if (Chart && Chart.registry) {
+          // some builds attach it differently; no-op if already registered
+        }
+
+        chart = new Chart(canvas, {
+          type: "line",
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "nearest", intersect: false },
+
+            plugins: {
+              legend: { display: true },
+
+              // ✅ zoom + pan (scroll left/right after zoom)
+              zoom: {
+                pan: {
+                  enabled: true,
+                  mode: "x",
+                  threshold: 2
+                  // allow dragging to pan
+                },
+                zoom: {
+                  wheel: { enabled: true },
+                  pinch: { enabled: true },
+                  mode: "x"
+                }
+              },
+
+              tooltip: {
+                callbacks: {
+                  // show full time in tooltip
+                  title: (items) => {
+                    if (!items || items.length === 0) return "";
+                    const idx = items[0].dataIndex;
+                    const label = chart.data.labels[idx];
+                    return "Time: " + label;
+                  },
+                  label: (ctx) => {
+                    const v = ctx.parsed.y;
+                    if (v === null || v === undefined) return ctx.dataset.label + ": -";
+                    return ctx.dataset.label + ": " + Number(v).toFixed(2) + " °C";
+                  }
+                }
+              }
+            },
+
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "Time"
+                },
+                ticks: {
+                  maxTicksLimit: 10
+                }
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: "Temperature (°C)"
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // Reset zoom button
+      if (resetZoomBtn) {
+        resetZoomBtn.addEventListener("click", () => {
+          if (chart) chart.resetZoom();
+        });
+      }
+
+      // Start/interval change -> re-render
+      if (startTimeEl) startTimeEl.addEventListener("change", () => {
+        if (chart) chart.resetZoom();
+        renderChart();
+      });
+      if (intervalEl) intervalEl.addEventListener("change", () => {
+        if (chart) chart.resetZoom();
+        renderChart();
+      });
+
+      // Live mode (simple reload; later we can do AJAX refresh)
+      let liveTimer = null;
+      if (liveModeEl) {
+        liveModeEl.addEventListener("change", () => {
+          if (liveTimer) clearInterval(liveTimer);
+          if (liveModeEl.value === "on") {
+            liveTimer = setInterval(() => location.reload(), 5000);
+          }
+        });
+      }
+
+      // first render
+      renderChart();
+    }
+    </script>
+
+  </div>
+</div>
+
+</body>
+</html>

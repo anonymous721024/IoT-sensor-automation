@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Home</title>
+</head>
+<body>
+
+<div th:replace="~{fragments/adminShell :: adminShell('home','Admin Home')}">
+  <div th:fragment="content">
+
+    <div style="display:grid; grid-template-columns: 1.2fr 0.8fr; gap:16px;">
+
+      <!-- Left: quick actions -->
+      <div style="border:1px solid #e6e6e6; border-radius:14px; padding:16px; background:#fff;">
+        <h2 style="margin:0 0 6px 0;">Admin Dashboard</h2>
+        <div style="color:#666; font-size:13px; margin-bottom:14px;">
+          Quick overview + shortcuts. Use Admin Chat for fast updates.
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+          <a href="/admin/sensors"
+             style="text-decoration:none; padding:10px 12px; border-radius:10px; border:1px solid #ddd; background:#f7f7f7; color:#111;">
+            Open Sensors
+          </a>
+          <a href="/admin/chat"
+             style="text-decoration:none; padding:10px 12px; border-radius:10px; border:1px solid #ddd; background:#f7f7f7; color:#111;">
+            Open Admin Chat
+          </a>
+        </div>
+
+        <div style="border-top:1px solid #eee; padding-top:14px;">
+          <h3 style="margin:0 0 10px 0;">What you can do</h3>
+          <ul style="margin:0; padding-left:18px; color:#333; line-height:1.6;">
+            <li>Use <b>Inventory</b> to view records, history, and update stock/price.</li>
+            <li>Use <b>Admin Chat</b> for fast commands like: add/remove/set/low stock.</li>
+            <li>Ask customer-style questions in Admin Chat too (optional) — it won’t edit inventory.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Right: inventory snapshot -->
+      <div style="border:1px solid #e6e6e6; border-radius:14px; padding:16px; background:#fff;">
+        <h3 style="margin:0 0 10px 0;">Inventory snapshot</h3>
+
+        <div th:if="${#lists.isEmpty(inventory)}" style="color:#666;">
+          No medicines recorded yet.
+        </div>
+
+        <div th:if="${!#lists.isEmpty(inventory)}">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:10px; border-bottom:1px solid #eee;">Name</th>
+                <th style="text-align:left; padding:10px; border-bottom:1px solid #eee;">Stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr th:each="m : ${inventory}">
+                <td style="padding:10px; border-bottom:1px solid #f0f0f0;">
+                  <span th:text="${m.name}">Name</span>
+                </td>
+                <td style="padding:10px; border-bottom:1px solid #f0f0f0;">
+                  <span th:text="${m.totalStock}">0</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top:12px; color:#666; font-size:12px;">
+            Tip: click Inventory for expiry + price range details.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

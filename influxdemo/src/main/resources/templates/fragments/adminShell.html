@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="adminShell(active,title)">
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; font-family: Arial, sans-serif; background:#f7f7f7; }
+
+    .app { display:flex; min-height:100vh; }
+
+    .sidebar {
+      width: 260px;
+      background:#fff;
+      border-right:1px solid #e8e8e8;
+      padding:16px;
+    }
+    .brand { font-weight:800; margin-bottom:14px; }
+
+    .nav a {
+      display:block;
+      padding:10px 12px;
+      border-radius:12px;
+      text-decoration:none;
+      color:#111;
+      border:1px solid transparent;
+      margin-bottom:8px;
+      background:#fafafa;
+    }
+    .nav a.active { border-color:#dcdcdc; background:#f3f3f3; }
+    .nav a:hover { border-color:#e0e0e0; }
+
+    .main { flex:1; display:flex; flex-direction:column; }
+
+    .topbar {
+      background:#fff;
+      border-bottom:1px solid #e8e8e8;
+      padding:10px 16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .topbar-title { font-weight:700; }
+    .top-links a { margin-left:12px; text-decoration:none; color:#333; font-size:14px; }
+
+    .content { padding:18px; }
+    .card { background:#fff; border:1px solid #e8e8e8; border-radius:18px; padding:16px; }
+  </style>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">Admin Console</div>
+
+      <div class="nav">
+        <a th:href="@{/admin}" th:classappend="${active}=='home' ? ' active' : ''">Admin Home</a>
+        <a th:href="@{/admin/sensors}" th:classappend="${active}=='sensors' ? ' active' : ''">Sensors</a>
+        <a th:href="@{/admin/data-flow}" th:classappend="${active}=='dataflow' ? ' active' : ''">Data Flow</a>
+        <a th:href="@{/admin/docs}" th:classappend="${active}=='docs' ? ' active' : ''">Documents</a>
+        <a th:href="@{/admin/chat}" th:classappend="${active}=='chat' ? ' active' : ''">Admin Chat</a>
+      </div>      
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="topbar-title" th:text="${title}">Title</div>
+        <div class="top-links">
+          <a href="/admin">Home</a>
+          <a href="/logout">Logout</a>
+        </div>
+      </div>
+
+      <div class="content">
+        <div th:replace="~{::content}">Content</div>
+      </div>
+    </main>
+  </div>
+</div>
+
+</body>
+</html>

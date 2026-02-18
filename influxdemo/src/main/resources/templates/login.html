@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Login</title>
+  <style>
+    * { box-sizing: border-box; }
+  
+    body{
+      font-family:Arial;
+      background:#f7f7f7;
+      margin:0
+    }
+  
+    .box{
+      max-width:420px;
+      margin:70px auto;
+      background:#fff;
+      border:1px solid #aba3a3;
+      border-radius:14px;
+      padding:18px
+    }
+  
+    input[type="text"],
+    input[type="password"]{
+      width:100%;
+      padding:12px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      margin-top:10px
+    }
+  
+    button{
+      width:100%;
+      padding:12px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      margin-top:12px;
+      background:#f7f7f7;
+      cursor:pointer;
+      font-weight:600
+    }
+  
+    .muted{color:#666;font-size:13px;margin-top:10px}
+    .err{color:#b00020;margin-top:10px}
+    a{color:#333}
+  </style>
+  
+</head>
+<body>
+
+<div class="box">
+  <h2 style="margin:0 0 6px 0;">Login</h2>
+  <div class="muted">Users and admins both login here.</div>
+
+  <div th:if="${param.signup}" class="muted">✅ Signup successful — please login.</div>
+  <div th:if="${param.error}" class="err">Invalid username or password.</div>
+
+  <form method="post" action="/login">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+    <input type="text" name="username" placeholder="Username" autocomplete="username" required />
+    <input name="password" type="password" placeholder="Password" autocomplete="current-password" required />
+
+    <label style="display:flex; gap:8px; align-items:center; margin-top:10px; font-size:13px; color:#444;">
+      <input type="checkbox" name="remember-me" checked />
+      Keep me logged in
+    </label>
+
+    <button type="submit">Login</button>
+  </form>
+
+  <div class="muted">
+    New user? <a href="/signup">Create an account</a>
+  </div>
+</div>
+
+</body>
+</html>

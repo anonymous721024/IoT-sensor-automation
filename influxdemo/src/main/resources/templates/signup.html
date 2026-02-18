@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Sign up</title>
+  <style>
+    * { box-sizing: border-box; }
+  
+    body{
+      font-family:Arial;
+      background:#f7f7f7;
+      margin:0
+    }
+  
+    .box{
+      max-width:420px;
+      margin:70px auto;
+      background:#fff;
+      border:1px solid #e6e6e6;
+      border-radius:14px;
+      padding:18px
+    }
+  
+    input[type="text"],
+    input[type="password"]{
+      width:100%;
+      padding:12px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      margin-top:10px
+    }
+  
+    button{
+      width:100%;
+      padding:12px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      margin-top:12px;
+      background:#f7f7f7;
+      cursor:pointer;
+      font-weight:600
+    }
+  
+    .muted{color:#666;font-size:13px;margin-top:10px}
+    .err{color:#b00020;margin-top:10px}
+    a{color:#333}
+  </style>
+  
+</head>
+<body>
+
+<div class="box">
+  <h2 style="margin:0 0 6px 0;">Sign up</h2>
+  <div class="muted">Create a user account.</div>
+
+  <div th:if="${error}" class="err" th:text="${error}"></div>
+
+  <form method="post" action="/signup">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+    <input type="text" name="username" placeholder="Username" required />
+    <input name="password" type="password" placeholder="Password (min 6 chars)" required />
+    <button type="submit">Create account</button>
+  </form>
+
+  <div class="muted">
+    Already have an account? <a href="/login">Login</a>
+  </div>
+</div>
+
+</body>
+</html>

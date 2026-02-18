@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Docs</title>
+  <style>
+    .card { background:#fff; border:1px solid #e8e8e8; border-radius:18px; padding:16px; }
+    .muted { color:#6b6b6b; font-size:12px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .btn { padding:10px 14px; border-radius:12px; border:1px solid #ddd; background:#f7f7f7; cursor:pointer; font-weight:600; }
+    .btn.primary { background:#111; color:#fff; border-color:#111; }
+    table { width:100%; border-collapse:separate; border-spacing:0; margin-top:12px; }
+    th, td { text-align:left; padding:12px; border-bottom:1px solid #eee; }
+    th { font-size:12px; color:#666; background:#fafafa; }
+    .table-wrap { border:1px solid #e8e8e8; border-radius:16px; overflow:hidden; background:#fff; }
+    input, select { padding:10px 12px; border-radius:12px; border:1px solid #ddd; font-size:14px; background:#fff; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+
+<div th:replace="~{fragments/adminShell :: adminShell('docs','Document Upload')}">
+  <div th:fragment="content">
+
+    <div class="card">
+      <h2 style="margin:0;">Upload Documents</h2>
+      <div class="muted" style="margin-top:6px;">
+        Upload EOP / Work Instructions files. Stored on disk, indexed in DB.
+      </div>
+
+      <form class="row" method="post" action="/admin/docs/upload" enctype="multipart/form-data" style="margin-top:12px;">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+        <select name="scope" id="scopeSelect" required>
+          <option value="GLOBAL">GLOBAL</option>
+          <option value="AREA">AREA</option>
+        </select>
+
+        <input type="text" name="ambientArea" id="ambientAreaInput"
+              placeholder="Ambient Area (required if AREA)" />
+
+        <input type="file" name="file" required />
+        <button class="btn primary" type="submit">Upload</button>
+
+        <span class="muted" th:if="${param.ok}">Uploaded.</span>
+        <span class="muted" th:if="${param.err}">Upload failed (check file type/size).</span>
+      </form>
+
+      <script>
+        const scopeSel = document.getElementById("scopeSelect");
+        const areaInp = document.getElementById("ambientAreaInput");
+
+        function syncAreaRequired() {
+          const isArea = scopeSel.value === "AREA";
+          areaInp.required = isArea;
+          areaInp.style.display = isArea ? "inline-block" : "none";
+          if (!isArea) areaInp.value = "";
+        }
+        scopeSel.addEventListener("change", syncAreaRequired);
+        syncAreaRequired();
+      </script>
+    </div>
+
+   <!-- Uploaded Files -->
+    <div class="card" style="margin-top:16px;">
+        <h3 style="margin:0 0 6px 0;">Uploaded Files</h3>
+        <div class="muted">PDF/DOCX/TXT supported. Docs can be GLOBAL or AREA scoped.</div>
+    
+        <div class="table-wrap" style="margin-top:12px;">
+        <table>
+            <thead>
+            <tr>
+                <th>Uploaded At</th>
+                <th>Scope</th>
+                <th>Ambient Area</th>
+                <th>Filename</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${#lists.isEmpty(docs)}">
+                <td colspan="5">No documents uploaded yet.</td>
+            </tr>
+    
+            <tr th:each="d : ${docs}">
+                <td th:text="${d.uploadedAt}" class="mono">-</td>
+                <td th:text="${d.scope}">-</td>
+                <td th:text="${d.ambientArea}">-</td>
+                <td th:text="${d.originalName}">-</td>
+                <td>
+                <a class="btn" th:href="@{/admin/docs/file/{id}(id=${d.id})}" target="_blank">View</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

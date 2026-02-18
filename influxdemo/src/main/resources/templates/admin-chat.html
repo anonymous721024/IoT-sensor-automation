@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="_csrf" th:content="${_csrf.token}" />
+  <meta name="_csrf_header" th:content="${_csrf.headerName}" />
+  <title>Admin Chat</title>
+  <style>
+    .grid2 { display:grid; grid-template-columns: 0.9fr 1.1fr; gap:16px; }
+    .card { background:#fff; border:1px solid #e8e8e8; border-radius:18px; padding:16px; }
+    .muted { color:#6b6b6b; font-size:12px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .btn { padding:10px 14px; border-radius:12px; border:1px solid #ddd; background:#f7f7f7; cursor:pointer; font-weight:600; }
+    .btn.primary { background:#111; color:#fff; border-color:#111; }
+    input, select { padding:10px 12px; border-radius:12px; border:1px solid #ddd; outline:none; font-size:14px; background:#fff; }
+    .doc { border:1px solid #eee; border-radius:14px; padding:10px; background:#fcfcfc; margin-top:10px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    textarea { width:100%; min-height:110px; padding:12px; border-radius:14px; border:1px solid #ddd; }
+    .chatbox { border:1px solid #eee; border-radius:14px; padding:12px; background:#fafafa; min-height:140px; line-height: 1.35; }
+    .docListWrap { margin-top:14px; max-height:520px; overflow:auto; padding-right:6px; }
+    .docListWrap::-webkit-scrollbar { width: 10px; }
+    .docListWrap::-webkit-scrollbar-thumb { background:#ddd; border-radius:10px; }
+
+    .selectedBox{
+      border:1px solid #e8e8e8;
+      background:#fff;
+      border-radius:14px;
+      padding:12px;
+    }
+    .badge{
+      display:inline-block;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid #e8e8e8;
+      background:#fafafa;
+      font-size:12px;
+      font-weight:800;
+    }
+    .badge.area{ background:#f3fbf5; border-color:#dfeee2; }
+    .badge.global{ background:#f6f6ff; border-color:#e2e2ff; }
+    .text-ok{ color:#0a7a2f; font-weight:800; }
+    .text-empty{ color:#b00020; font-weight:800; }
+
+    .sourceBox{
+      border:1px solid #e8e8e8;
+      background:#fff;
+      border-radius:14px;
+      padding:12px;
+    }
+    .sourceLink{
+      display:block;
+      padding:8px 10px;
+      border:1px solid #eee;
+      border-radius:12px;
+      background:#fcfcfc;
+      text-decoration:none;
+      color:#111;
+      margin-top:8px;
+    }
+    .sourceLink:hover{ border-color:#ddd; background:#f7f7f7; }
+    .sourceMeta{ font-size:12px; color:#6b6b6b; margin-top:4px; }
+
+    .chatbox { overflow:auto; max-height: 420px; }
+    .msgRow { display:flex; margin-top:10px; }
+    .msgRow.user { justify-content:flex-end; }
+    .msgRow.assistant { justify-content:flex-start; }
+
+    .bubble {
+      max-width: 85%;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid #e8e8e8;
+      white-space: pre-wrap;
+      line-height: 1.35;
+    }
+    .bubble.user { background:#111; color:#fff; border-color:#111; }
+    .bubble.assistant { background:#fff; color:#111; }
+
+    .msgMeta { font-size:11px; color:#6b6b6b; margin-top:4px; }
+
+    /* ChatGPT-like chat history */
+    .chatbox {
+      overflow:auto;
+      max-height: 360px;
+    }
+
+    /* message rows */
+    .msgRow { display:flex; margin-top:10px; }
+    .msgRow.user { justify-content:flex-end; }
+    .msgRow.assistant { justify-content:flex-start; }
+
+    /* bubbles */
+    .bubble {
+      max-width: 85%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid #e8e8e8;
+      white-space: pre-wrap;
+      line-height: 1.35;
+    }
+    .bubble.user {
+      background: #111;
+      color: #fff;
+      border-color: #111;
+    }
+    .bubble.assistant {
+      background: #fff;
+      color: #111;
+    }
+
+    /* thinking style */
+    .bubble.thinking {
+      color: #6b6b6b;
+      font-style: italic;
+    }
+
+    /* disable send styling */
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/adminShell :: adminShell('chat','Admin Chat')}">
+  <div th:fragment="content">
+
+    <div class="grid2">
+
+      <!-- LEFT: Documents -->
+      <div class="card">
+        <h3 style="margin:0;">Documents for Chat</h3>
+        <div class="muted" style="margin-top:6px;">
+          Choose which EOP / Working Instruction documents the chat is allowed to use.
+        </div>
+
+        <!-- STEP 1: Area -->
+        <div style="margin-top:14px;">
+          <div class="muted" style="font-weight:800;">Step 1 — Scope (optional)</div>
+
+          <form method="get" action="/admin/chat" style="margin-top:10px;">
+            <div class="row">
+              <input name="area" placeholder="Ambient Area (optional)" th:value="${selectedArea}">
+              <button class="btn" type="submit">Set Area</button>
+            </div>
+          </form>
+
+          <div class="muted" style="margin-top:8px;">
+            If an area is set, AREA-scoped docs for that area should be preferred.
+          </div>
+        </div>
+
+        <!-- STEP 2: Upload -->
+        <div style="margin-top:16px;">
+          <div class="muted" style="font-weight:800;">Step 2 — Upload</div>
+
+          <form method="post" action="/admin/chat/upload" enctype="multipart/form-data" style="margin-top:10px;">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+            <div class="row">
+              <select name="scope" id="uploadScope">
+                <option value="GLOBAL">GLOBAL</option>
+                <option value="AREA">AREA</option>
+              </select>
+
+              <input name="ambientArea" id="uploadArea" onblur="this.value=this.value.trim()" placeholder="Ambient Area (required if AREA)" th:value="${selectedArea}">
+            </div>
+
+            <div class="row" style="margin-top:10px;">
+              <input type="file" name="file" accept=".pdf,.docx,.txt" required>
+              <button class="btn primary" type="submit">Upload</button>
+            </div>
+
+            <div class="muted" style="margin-top:8px;">
+              Supported: pdf/docx/txt. Stored on disk and viewable inline.
+              <span id="uploadHint" style="display:none;">AREA requires Ambient Area.</span>
+            </div>
+          </form>
+        </div>
+
+        <div class="muted" th:if="${param.ok}" style="margin-top:8px;">
+          ✅ Upload successful.
+        </div>
+
+        <div class="muted" th:if="${param.err}" style="margin-top:8px;">
+          ❌ Upload failed: <span th:text="${param.err}">error</span>
+        </div>
+
+        <!-- STEP 3: Select -->
+        <div style="margin-top:16px;">
+          <div class="muted" style="font-weight:800;">Step 3 — Select documents</div>
+
+          <div style="margin-top:10px;">
+            <div class="row">
+              <input id="docSearch" placeholder="Search docs (name / scope / area)..." style="flex:1; min-width:200px;">
+              <label class="muted" style="display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="onlySelected">
+                Only selected
+              </label>
+            </div>
+
+            <div class="row" style="margin-top:10px;">
+              <button type="button" class="btn" id="selRecommended">Recommended</button>
+              <button type="button" class="btn" id="selAll">All</button>
+              <button type="button" class="btn" id="selNone">None</button>
+              <button type="button" class="btn" id="selGlobal">Global</button>
+              <button type="button" class="btn" id="selArea">Area match</button>
+              <span class="muted" id="selCount">Selected: 0</span>
+            </div>
+          </div>
+
+          <div class="selectedBox" style="margin-top:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div style="font-weight:800;">Selected docs</div>
+              <div class="muted" id="selectedSummaryMeta">0 selected</div>
+            </div>
+            <div class="muted" style="margin-top:6px;" id="selectedSummaryEmpty">
+              No docs selected — the chat will have no sources.
+            </div>
+            <div id="selectedSummaryList" style="margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- Doc list -->
+        <div class="docListWrap">
+
+          <div th:if="${#lists.isEmpty(docs)}" class="muted" style="margin-top:10px;">
+            No docs uploaded yet.
+          </div>
+
+          <div th:if="${!#lists.isEmpty(docs)}">
+
+            <!-- AREA DOCS -->
+            <div style="margin-top:14px;">
+              <div class="muted" style="font-weight:800;">AREA Docs</div>
+
+              <div th:each="d : ${docs}"
+                   th:if="${d.scope == 'AREA'}"
+                   class="doc docItem"
+                   th:attr="
+                    data-name=${#strings.toLowerCase(d.originalName)},
+                    data-scope=${d.scope},
+                    data-area=${d.ambientArea},
+                    data-area-lower=${#strings.toLowerCase(d.ambientArea)},
+                    data-textlen=${d.extractedText != null ? #strings.length(d.extractedText) : 0}
+                   ">
+                <label style="display:flex; gap:10px; align-items:flex-start;">
+                  <input type="checkbox" class="docChk" th:value="${d.id}">
+                  <div style="flex:1;">
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                      <div class="docName" style="font-weight:800;" th:text="${d.originalName}">doc</div>
+                      <span class="badge area">AREA</span>
+                      <span class="badge" th:text="${d.ambientArea}">A1</span>
+                    </div>
+
+                    <div class="muted" style="margin-top:4px;">
+                      <span class="textFlag">Text: <span class="mono">(checking)</span></span>
+                    </div>
+
+                    <div style="margin-top:8px;">
+                      <a class="mono" th:href="@{'/admin/chat/docs/' + ${d.id}}" target="_blank">View</a>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div class="muted" style="margin-top:8px;"
+                   th:if="${#lists.isEmpty(docs.?[scope == 'AREA'])}">
+                (No AREA docs)
+              </div>
+            </div>
+
+            <!-- GLOBAL DOCS -->
+            <div style="margin-top:14px;">
+              <div class="muted" style="font-weight:800;">GLOBAL Docs</div>
+
+              <div th:each="d : ${docs}"
+                   th:if="${d.scope == 'GLOBAL'}"
+                   class="doc docItem"
+                   th:attr="
+                    data-name=${#strings.toLowerCase(d.originalName)},
+                    data-scope=${d.scope},
+                    data-area='',
+                    data-area-lower='',
+                    data-textlen=${d.extractedText != null ? #strings.length(d.extractedText) : 0}
+                   ">
+                <label style="display:flex; gap:10px; align-items:flex-start;">
+                  <input type="checkbox" class="docChk" th:value="${d.id}">
+                  <div style="flex:1;">
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                      <div class="docName" style="font-weight:800;" th:text="${d.originalName}">doc</div>
+                      <span class="badge global">GLOBAL</span>
+                    </div>
+
+                    <div class="muted" style="margin-top:4px;">
+                      <span class="textFlag">Text: <span class="mono">(checking)</span></span>
+                    </div>
+
+                    <div style="margin-top:8px;">
+                      <a class="mono" th:href="@{'/admin/chat/docs/' + ${d.id}}" target="_blank">View</a>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div class="muted" style="margin-top:8px;"
+                   th:if="${#lists.isEmpty(docs.?[scope == 'GLOBAL'])}">
+                (No GLOBAL docs)
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Chat -->
+      <div class="card">
+        <h3 style="margin:0;">Ask the system</h3>
+        <div class="muted" style="margin-top:6px;">
+          Phase 1: basic document matching + excerpts. Later we’ll connect real AI + EOP reasoning.
+        </div>
+
+        <div class="chatbox" id="chatOut" style="margin-top:12px;"></div>
+
+        <div class="sourceBox" id="sourcesBox" style="margin-top:10px; display:none;">
+          <div style="font-weight:800;">Sources Used</div>
+          <div class="muted" id="sourcesCase" style="margin-top:4px;"></div>
+          <div id="sourcesList" style="margin-top:8px;"></div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <textarea id="msg" placeholder="Describe the issue (include ambient area name if it’s area-specific)..."></textarea>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <button class="btn primary" id="sendBtn">Send</button>
+          <span class="muted" id="meta"></span>
+        </div>
+      </div>
+    </div>
+
+    <script th:inline="javascript">
+      const selectedArea = /*[[${selectedArea}]]*/ "";
+      const prefill = /*[[${prefill}]]*/ "";
+      const autoselect = /*[[${autoselect}]]*/ "0";
+
+      // -------------------- UPLOAD UI --------------------
+      const uploadScopeEl = document.getElementById("uploadScope");
+      const uploadAreaEl = document.getElementById("uploadArea");
+      const uploadHintEl = document.getElementById("uploadHint");
+
+      function syncUploadScope() {
+        if (!uploadScopeEl || !uploadAreaEl) return;
+        const isArea = uploadScopeEl.value === "AREA";
+        uploadAreaEl.required = isArea;
+        uploadAreaEl.style.display = isArea ? "inline-block" : "none";
+        if (!isArea) uploadAreaEl.value = "";
+        if (uploadHintEl) uploadHintEl.style.display = isArea ? "inline" : "none";
+      }
+      uploadScopeEl?.addEventListener("change", syncUploadScope);
+      syncUploadScope();
+
+      // -------------------- DOC UI (search + bulk select + count) --------------------
+      const docSearchEl = document.getElementById("docSearch");
+      const onlySelectedEl = document.getElementById("onlySelected");
+      const selCountEl = document.getElementById("selCount");
+
+      const selectedSummaryMetaEl = document.getElementById("selectedSummaryMeta");
+      const selectedSummaryEmptyEl = document.getElementById("selectedSummaryEmpty");
+      const selectedSummaryListEl = document.getElementById("selectedSummaryList");
+
+      function getDocLabel(el) {
+        const nameEl = el.querySelector(".docName");
+        const name = nameEl ? nameEl.textContent.trim() : "Unnamed";
+        const scope = (el.getAttribute("data-scope") || "").toUpperCase();
+        const area = (el.getAttribute("data-area") || "").trim();
+        return { name, scope, area };
+      }
+
+      function updateSelectedCount() {
+        const checkedEls = Array.from(document.querySelectorAll(".docItem"))
+          .filter(el => {
+            const chk = el.querySelector(".docChk");
+            return chk && chk.checked;
+          });
+
+        const n = checkedEls.length;
+        if (selCountEl) selCountEl.textContent = `Selected: ${n}`;
+
+        if (selectedSummaryMetaEl) selectedSummaryMetaEl.textContent = `${n} selected`;
+        if (selectedSummaryEmptyEl) selectedSummaryEmptyEl.style.display = n === 0 ? "block" : "none";
+
+        if (selectedSummaryListEl) {
+          selectedSummaryListEl.innerHTML = "";
+          const top = checkedEls.slice(0, 6);
+
+          for (const el of top) {
+            const info = getDocLabel(el);
+            const line = document.createElement("div");
+            line.className = "muted";
+            line.style.marginTop = "6px";
+            line.textContent =
+              `✅ ${info.scope}` + (info.scope === "AREA" ? ` / ${info.area || "?"}` : "") + ` — ${info.name}`;
+            selectedSummaryListEl.appendChild(line);
+          }
+
+          if (n > 6) {
+            const more = document.createElement("div");
+            more.className = "muted";
+            more.style.marginTop = "6px";
+            more.textContent = `…and ${n - 6} more`;
+            selectedSummaryListEl.appendChild(more);
+          }
+        }
+      }
+
+      function applyFilter() {
+        const q = (docSearchEl?.value || "").trim().toLowerCase();
+        const onlySel = !!onlySelectedEl?.checked;
+
+        const items = Array.from(document.querySelectorAll(".docItem"));
+        for (const el of items) {
+          const name = el.getAttribute("data-name") || "";
+          const scope = (el.getAttribute("data-scope") || "").toLowerCase();
+          const area = (el.getAttribute("data-area-lower") || "");
+
+          const chk = el.querySelector(".docChk");
+          const checked = chk && chk.checked;
+
+          let matches = true;
+          if (q) matches = (name.includes(q) || scope.includes(q) || area.includes(q));
+          if (onlySel) matches = matches && checked;
+
+          el.style.display = matches ? "block" : "none";
+        }
+      }
+
+      function setSelection(mode) {
+        const items = Array.from(document.querySelectorAll(".docItem"));
+        for (const el of items) {
+          const chk = el.querySelector(".docChk");
+          if (!chk) continue;
+
+          const scope = (el.getAttribute("data-scope") || "").toUpperCase();
+          const area = (el.getAttribute("data-area") || "");
+          const textLen = parseInt(el.getAttribute("data-textlen") || "0", 10);
+          const hasText = textLen > 30;
+
+          const isGlobal = scope === "GLOBAL";
+          const isArea = scope === "AREA" && selectedArea && area === selectedArea;
+
+          if (mode === "all") chk.checked = true;
+          if (mode === "none") chk.checked = false;
+          if (mode === "global") chk.checked = isGlobal;
+          if (mode === "area") chk.checked = isArea;
+
+          if (mode === "recommended") {
+            if (!selectedArea || selectedArea.trim().length === 0) {
+              chk.checked = hasText && isGlobal;
+            } else {
+              chk.checked = hasText && (isGlobal || isArea);
+            }
+          }
+        }
+        updateSelectedCount();
+        applyFilter();
+      }
+
+      function renderTextFlags() {
+        const items = Array.from(document.querySelectorAll(".docItem"));
+        for (const el of items) {
+          const len = parseInt(el.getAttribute("data-textlen") || "0", 10);
+          const flag = el.querySelector(".textFlag");
+          if (!flag) continue;
+
+          flag.innerHTML = len > 30
+            ? `Text: <span class="text-ok">OK</span>`
+            : `Text: <span class="text-empty">EMPTY</span>`;
+        }
+      }
+
+      // Wire doc UI events
+      docSearchEl?.addEventListener("input", applyFilter);
+      onlySelectedEl?.addEventListener("change", applyFilter);
+      document.getElementById("selAll")?.addEventListener("click", () => setSelection("all"));
+      document.getElementById("selNone")?.addEventListener("click", () => setSelection("none"));
+      document.getElementById("selGlobal")?.addEventListener("click", () => setSelection("global"));
+      document.getElementById("selArea")?.addEventListener("click", () => setSelection("area"));
+      document.getElementById("selRecommended")?.addEventListener("click", () => setSelection("recommended"));
+
+      for (const chk of document.querySelectorAll(".docChk")) {
+        chk.addEventListener("change", () => {
+          updateSelectedCount();
+          applyFilter();
+        });
+      }
+
+      // Autoselect (GLOBAL + matching AREA)
+      if (autoselect === "1") {
+        const docs = Array.from(document.querySelectorAll(".docItem"));
+        for (const d of docs) {
+          const scope = (d.getAttribute("data-scope") || "").toUpperCase();
+          const area = (d.getAttribute("data-area") || "");
+          const chk = d.querySelector(".docChk");
+          if (!chk) continue;
+
+          const isGlobal = scope === "GLOBAL";
+          const isArea = scope === "AREA" && area && selectedArea && area === selectedArea;
+          chk.checked = isGlobal || isArea;
+        }
+      }
+
+      // Init docs UI
+      renderTextFlags();
+      updateSelectedCount();
+      applyFilter();
+      const sb = document.getElementById("sourcesBox");
+      if (sb) sb.style.display = "none";
+
+      // -------------------- CHAT UI (FIXED ORDER) --------------------
+      const chatOut = document.getElementById("chatOut");
+      const msgEl = document.getElementById("msg");
+      const sendBtn = document.getElementById("sendBtn");
+      const metaEl = document.getElementById("meta");
+
+      function appendBubble(role, text, extraClass) {
+        if (!chatOut) return null;
+
+        const row = document.createElement("div");
+        row.className = "msgRow " + role;
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble " + role + (extraClass ? (" " + extraClass) : "");
+        bubble.textContent = text;
+
+        row.appendChild(bubble);
+        chatOut.appendChild(row);
+
+        chatOut.scrollTop = chatOut.scrollHeight;
+        return bubble;
+      }
+
+      function getSelectedDocIds() {
+        return Array.from(document.querySelectorAll(".docChk"))
+          .filter(x => x.checked)
+          .map(x => x.value);
+      }
+
+      // Greeting / Prefill
+      if (chatOut) chatOut.innerHTML = "";
+      if (prefill && prefill.trim().length > 0) {
+        if (msgEl) msgEl.value = prefill;
+        appendBubble("assistant", "Prefilled from Data Flow alert. Review and press Send.");
+      } else {
+        appendBubble("assistant", "Ready.");
+      }
+
+      // Disable Send when empty
+      function syncSendEnabled() {
+        const val = (msgEl?.value || "").trim();
+        if (sendBtn) sendBtn.disabled = (val.length === 0);
+      }
+      msgEl?.addEventListener("input", syncSendEnabled);
+      syncSendEnabled();
+
+      // Enter to send (Shift+Enter newline)
+      msgEl?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          send();
+        }
+      });
+
+      sendBtn?.addEventListener("click", send);
+
+      async function send() {
+        const sourcesBox = document.getElementById("sourcesBox");
+        const sourcesCase = document.getElementById("sourcesCase");
+        const sourcesList = document.getElementById("sourcesList");
+
+        const message = (msgEl?.value || "").trim();
+        if (!message) { syncSendEnabled(); return; }
+
+        // Lock UI
+        if (sendBtn) sendBtn.disabled = true;
+        if (metaEl) metaEl.textContent = "Sending...";
+
+        // User bubble + clear input
+        appendBubble("user", message);
+        msgEl.value = "";
+        syncSendEnabled();
+
+        // Hide sources until done
+        if (sourcesBox) sourcesBox.style.display = "none";
+
+        // Thinking bubble
+        const thinkingBubble = appendBubble("assistant", "Thinking…", "thinking");
+
+        // Selected docs
+        const docIds = getSelectedDocIds();
+        if (metaEl) metaEl.textContent = `Area="${selectedArea}" | docs=${docIds.length}`;
+
+        // CSRF
+        const csrfTokenMeta = document.querySelector('meta[name="_csrf"]');
+        const csrfHeaderMeta = document.querySelector('meta[name="_csrf_header"]');
+        if (!csrfTokenMeta || !csrfHeaderMeta) {
+          thinkingBubble.classList.remove("thinking");
+          thinkingBubble.textContent = "ERROR: CSRF meta tags missing.";
+          sendBtn.disabled = false;
+          syncSendEnabled();
+          return;
+        }
+        const csrfToken = csrfTokenMeta.getAttribute("content");
+        const csrfHeader = csrfHeaderMeta.getAttribute("content");
+
+        let resp;
+        try {
+          resp = await fetch("/admin/chat/send-stream", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              [csrfHeader]: csrfToken
+            },
+            body: JSON.stringify({ message, area: selectedArea, docIds })
+          });
+        } catch (e) {
+          thinkingBubble.classList.remove("thinking");
+          thinkingBubble.textContent = "Network error: could not reach the server.";
+          sendBtn.disabled = false;
+          syncSendEnabled();
+          return;
+        }
+
+        // Redirect (session expired)
+        if (resp.redirected) {
+          thinkingBubble.classList.remove("thinking");
+          thinkingBubble.textContent = "Session expired. Reloading…";
+          window.location.href = resp.url;
+          return;
+        }
+
+        if (!resp.ok) {
+          thinkingBubble.classList.remove("thinking");
+          thinkingBubble.textContent = `Server error (HTTP ${resp.status}).`;
+          sendBtn.disabled = false;
+          syncSendEnabled();
+          if (metaEl) metaEl.textContent = `HTTP ${resp.status}`;
+          return;
+        }
+
+        // Stream NDJSON
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        let gotFirstToken = false;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          let idx;
+          while ((idx = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, idx).trim();
+            buffer = buffer.slice(idx + 1);
+            if (!line) continue;
+
+            let obj;
+            try { obj = JSON.parse(line); } catch (e) { continue; }
+
+            if (obj.type === "token") {
+              if (!gotFirstToken) {
+                gotFirstToken = true;
+                thinkingBubble.classList.remove("thinking");
+                thinkingBubble.textContent = "";
+              }
+              thinkingBubble.textContent += (obj.text || "");
+              chatOut.scrollTop = chatOut.scrollHeight;
+            }
+
+            if (obj.type === "error") {
+              thinkingBubble.classList.remove("thinking");
+              thinkingBubble.textContent += "\n" + (obj.message || "Unknown error");
+            }
+
+            if (obj.type === "done") {
+              const caseType = obj.case || "";
+              const topMatchesArr = Array.isArray(obj.topMatches) ? obj.topMatches : [];
+              const otherDocsArr = Array.isArray(obj.otherDocs) ? obj.otherDocs : [];
+
+              if (sourcesBox && sourcesCase && sourcesList) {
+                const hasAnySources = topMatchesArr.length > 0 || otherDocsArr.length > 0 || !!caseType;
+                sourcesBox.style.display = hasAnySources ? "block" : "none";
+                sourcesList.innerHTML = "";
+
+                if (hasAnySources) {
+                  sourcesCase.textContent =
+                    (caseType ? `Case: ${caseType}` : "Case: (unknown)") +
+                    ` • Top: ${topMatchesArr.length} • Other: ${otherDocsArr.length}`;
+
+                  const topTitle = document.createElement("div");
+                  topTitle.style.fontWeight = "800";
+                  topTitle.style.marginTop = "6px";
+                  topTitle.textContent = "Top matches";
+                  sourcesList.appendChild(topTitle);
+
+                  if (topMatchesArr.length === 0) {
+                    const none = document.createElement("div");
+                    none.className = "muted";
+                    none.textContent = "No strong matches found.";
+                    sourcesList.appendChild(none);
+                  } else {
+                    for (const m of topMatchesArr) {
+                      if (!m || !m.id) continue;
+
+                      const a = document.createElement("a");
+                      a.className = "sourceLink";
+                      a.href = "/admin/chat/docs/" + m.id;
+                      a.target = "_blank";
+                      a.rel = "noopener";
+
+                      const scoreText = (m.score === null || m.score === undefined) ? "?" : m.score;
+                      const nameText = m.name ? m.name : "Unnamed";
+                      a.appendChild(document.createTextNode(nameText + " (score " + scoreText + ")"));
+
+                      const meta = document.createElement("div");
+                      meta.className = "sourceMeta";
+                      meta.textContent = (m.scope || "GLOBAL") + (m.ambientArea ? " / " + m.ambientArea : "");
+                      a.appendChild(meta);
+
+                      if (m.excerpt) {
+                        const ex = document.createElement("div");
+                        ex.className = "sourceMeta";
+                        const clipped = m.excerpt.length > 220 ? m.excerpt.slice(0, 220) + "…" : m.excerpt;
+                        ex.textContent = "Excerpt: " + clipped;
+                        a.appendChild(ex);
+                      }
+
+                      sourcesList.appendChild(a);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Unlock
+        if (sendBtn) sendBtn.disabled = false;
+        syncSendEnabled();
+        if (metaEl) metaEl.textContent = `Area="${selectedArea}" | docs=${docIds.length}`;
+      }
+    </script>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,58 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Application secrets ###
+# Keep application.properties committed (project config)
+# If you have real secrets, put them in application-local.properties or .env
+application-local.properties
+*.env
+.env
+
+# macOS
+.DS_Store
+
+# Java/Maven
+**/target/
+*.class
+*.jar
+*.log
+
+# Spring / temp
+*.tmp
+
+# Runtime uploads/storage (do not commit user files)
+uploads/
+storage/
+
+
