@@ -1,8 +1,13 @@
 package com.example.influxdemo.data;
 
-import com.example.influxdemo.models.MedicineRecord;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import com.example.influxdemo.models.SensorRegistryRow;
+import com.example.influxdemo.models.SensorReadingEventRow;
+import com.example.influxdemo.models.AppSettingsRow;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
@@ -10,11 +15,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.example.influxdemo.models.SensorRegistryRow;
-import com.example.influxdemo.models.SensorReadingEventRow;
-import com.example.influxdemo.models.AppSettingsRow;
-
 
 @Component
 public class InfluxClient {
@@ -39,25 +39,6 @@ public class InfluxClient {
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
         return restTemplate.exchange(url, HttpMethod.GET, entity, String.class).getBody();
-    }
-
-    // ---- WRITE (Line Protocol) ----
-    public void writeMedicine(String name, int stock, double price, String expiry) {
-        // measurement: medicine
-        // tag: name
-        // fields: stock (int), price (float), expiry (string)
-        String line =
-                "medicine,name=" + escapeTag(name) +
-                " stock=" + stock + "i,price=" + price + ",expiry=" + quoteString(expiry);
-
-        String url = influxUrl + "/api/v3/write_lp?db=" + db;
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + token);
-        headers.setContentType(MediaType.TEXT_PLAIN);
-
-        HttpEntity<String> entity = new HttpEntity<>(line, headers);
-        restTemplate.postForEntity(url, entity, String.class);
     }
 
     public void writeSensorRegistry(
@@ -111,45 +92,6 @@ public class InfluxClient {
         postLineProtocol(line);
     }
 
-
-    // ---- QUERY (SQL over HTTP) ----
-    public List<MedicineRecord> queryLatestMedicines(int limit) {
-        String sql =
-                "SELECT time, name, stock, price, expiry " +
-                "FROM iox.medicine " +
-                "ORDER BY time DESC " +
-                "LIMIT " + limit;
-
-        String url = influxUrl + "/api/v3/query_sql";
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + token);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            String body = mapper.createObjectNode()
-                .put("db", db)
-                .put("q", sql)
-                .toString();
-
-            HttpEntity<String> entity = new HttpEntity<>(body, headers);
-
-            try {
-                ResponseEntity<String> resp =
-                        restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-
-                String json = resp.getBody();
-                if (json == null || json.isBlank()) {
-                    return new ArrayList<>();
-                }
-                return parseMedicinesFromJson(json);
-
-            } catch (Exception e) {
-                // If the table doesn't exist yet, just return empty list so UI doesn't 500
-                return new ArrayList<>();
-            }
-    }
-
-
     // --- Internal: Execute query_sql and return raw JSON ---
     // --- Internal: Execute query_sql and return raw JSON ---
     private String querySqlRaw(String sql) {
@@ -195,52 +137,10 @@ public class InfluxClient {
     }    
 
     // Line-protocol helpers
-    private String escapeTag(String s) {
-        if (s == null) return "";
-        return s.trim().replace(" ", "\\ ").replace(",", "\\,");
-    }
-
     private String quoteString(String s) {
         if (s == null) return "\"\"";
         String cleaned = s.replace("\"", "\\\"");
         return "\"" + cleaned + "\"";
-    }
-
-    /**
-     * Converts InfluxDB SQL JSON response into a list of MedicineRecord objects.
-     *
-     * This method exists to:
-     * - prevent 500 errors when the table is empty
-     * - isolate JSON parsing logic from query logic
-     */
-    private List<MedicineRecord> parseMedicinesFromJson(String json) {
-        try {
-            JsonNode root = mapper.readTree(json);
-
-            // Case 1: response is already an array of rows
-            if (root.isArray()) {
-                return mapper.convertValue(
-                    root,
-                    new TypeReference<List<MedicineRecord>>() {}
-                );
-            }
-
-            // Case 2: response is an object containing "data": [...]
-            JsonNode dataNode = root.get("data");
-            if (dataNode != null && dataNode.isArray()) {
-                return mapper.convertValue(
-                    dataNode,
-                    new TypeReference<List<MedicineRecord>>() {}
-                );
-            }
-
-            // Unknown response shape → treat as empty
-            return new ArrayList<>();
-
-        } catch (Exception e) {
-            // Parsing failure should NEVER crash the app
-            return new ArrayList<>();
-        }
     }
     
     private <T> List<T> parseListFromJson(String json, TypeReference<List<T>> typeRef) {
@@ -261,80 +161,6 @@ public class InfluxClient {
             return new ArrayList<>();
         }
     }
-    
-    public void writeMedicineEvent(String name, int stockDelta, Double price, String expiry) {
-
-        // measurement: medicine_event
-        // tag: name
-        // fields: stock_delta (int), price (float optional), expiry (string optional)
-    
-        StringBuilder fields = new StringBuilder();
-        fields.append("stock_delta=").append(stockDelta).append("i");
-    
-        if (price != null) {
-            fields.append(",price=").append(price);
-        }
-        if (expiry != null && !expiry.isBlank()) {
-            fields.append(",expiry=").append(quoteString(expiry));
-        }
-    
-        String line = "medicine_event,name=" + escapeTag(name) + " " + fields;
-    
-        String url = influxUrl + "/api/v3/write_lp?db=" + db;
-    
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + token);
-        headers.setContentType(MediaType.TEXT_PLAIN);
-    
-        HttpEntity<String> entity = new HttpEntity<>(line, headers);
-    
-        ResponseEntity<String> resp = restTemplate.postForEntity(url, entity, String.class);
-    
-        if (resp.getStatusCode().isError()) {
-            throw new RuntimeException("Influx write failed: " + resp.getStatusCode());
-        }
-    }
-    
-
-    public List<MedicineRecord> queryMedicineRows(String nameContains, int limit) {
-        String where = "";
-        if (nameContains != null && !nameContains.isBlank()) {
-            String safe = nameContains.replace("'", "''").toLowerCase();
-            where = "WHERE lower(name) LIKE '%" + safe + "%' ";
-        }
-    
-        String sql =
-                "SELECT time, name, stock_delta AS stock, price, expiry " +
-                "FROM medicine_event " +
-                where +
-                "ORDER BY time DESC " +
-                "LIMIT " + limit;
-    
-        try {
-            String json = querySqlRaw(sql);
-            if (json == null || json.isBlank()) return new ArrayList<>();
-            return parseMedicinesFromJson(json);
-        } catch (Exception e) {
-            return new ArrayList<>();
-        }
-    }    
-    
-
-    public List<MedicineRecord> queryMedicineEvents(int limit) {
-        String sql =
-                "SELECT time, name, stock_delta AS stock, price, expiry " +
-                "FROM medicine_event " +
-                "ORDER BY time DESC " +
-                "LIMIT " + limit;
-    
-        try {
-            String json = querySqlRaw(sql);
-            if (json == null || json.isBlank()) return new ArrayList<>();
-            return parseMedicinesFromJson(json);
-        } catch (Exception e) {
-            return new ArrayList<>();
-        }
-    }    
 
     public List<SensorRegistryRow> querySensorRegistry(String nameOrAreaContains, int limit) {
         String where = "";
